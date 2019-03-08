@@ -215,16 +215,17 @@ function findElement(elements: Element[], text: string, shouldSelectRightmostEle
 
 // Finds the start element of each development application on the current PDF page (there are
 // typically two development applications on a single page and each development application
-// typically begins with the text "Application No").
+// typically begins with the text "Application Number").
 
 function findStartElements(elements: Element[]) {
     // Examine all the elements on the page that being with "A" or "a".
     
     let startElements: Element[] = [];
     for (let element of elements.filter(element => element.text.trim().toLowerCase().startsWith("a"))) {
-        // Extract up to 5 elements to the right of the element that has text starting with the
-        // letter "a" (and so may be the start of the "Application No" text).  Join together the
-        // elements to the right in an attempt to find the best match to the text "Application No".
+        // Extract up to 5 elements to the right of the element that has text starting with
+        // the letter "a" (and so may be the start of the "Application Number" text).  Join
+        // together the elements to the right in an attempt to find the best match to the text
+        // "Application Number".
 
         let rightElement = element;
         let rightElements: Element[] = [];
@@ -235,15 +236,15 @@ function findStartElements(elements: Element[]) {
         
             // Allow for common misspellings of the "no." text.
 
-            let text = rightElements.map(element => element.text).join("").replace(/[\s,\-_]/g, "").replace(/n0/g, "no").replace(/n°/g, "no").replace(/"o/g, "no").replace(/"0/g, "no").replace(/"°/g, "no").replace(/“°/g, "no").toLowerCase();
-            if (text.length >= 16)  // stop once the text is too long
+            let text = rightElements.map(element => element.text).join("").replace(/[\s,\-_]/g, "").toLowerCase();
+            if (text.length >= 20)  // stop once the text is too long
                 break;
-            if (text.length >= 13) {  // ignore until the text is close to long enough
-                if (text === "applicationno")
+            if (text.length >= 17) {  // ignore until the text is close to long enough
+                if (text === "applicationnumber")
                     matches.push({ element: rightElement, threshold: 0, text: text });
-                else if (didYouMean(text, [ "ApplicationNo" ], { caseSensitive: false, returnType: didyoumean.ReturnTypeEnums.FIRST_CLOSEST_MATCH, thresholdType: didyoumean.ThresholdTypeEnums.EDIT_DISTANCE, threshold: 1, trimSpaces: true }) !== null)
+                else if (didYouMean(text, [ "ApplicationNumber" ], { caseSensitive: false, returnType: didyoumean.ReturnTypeEnums.FIRST_CLOSEST_MATCH, thresholdType: didyoumean.ThresholdTypeEnums.EDIT_DISTANCE, threshold: 1, trimSpaces: true }) !== null)
                     matches.push({ element: rightElement, threshold: 1, text: text });
-                else if (didYouMean(text, [ "ApplicationNo" ], { caseSensitive: false, returnType: didyoumean.ReturnTypeEnums.FIRST_CLOSEST_MATCH, thresholdType: didyoumean.ThresholdTypeEnums.EDIT_DISTANCE, threshold: 2, trimSpaces: true }) !== null)
+                else if (didYouMean(text, [ "ApplicationNumber" ], { caseSensitive: false, returnType: didyoumean.ReturnTypeEnums.FIRST_CLOSEST_MATCH, thresholdType: didyoumean.ThresholdTypeEnums.EDIT_DISTANCE, threshold: 2, trimSpaces: true }) !== null)
                     matches.push({ element: rightElement, threshold: 2, text: text });
             }
 
@@ -256,7 +257,7 @@ function findStartElements(elements: Element[]) {
             let bestMatch = matches.reduce((previous, current) =>
                 (previous === undefined ||
                 current.threshold < previous.threshold ||
-                (current.threshold === previous.threshold && Math.abs(current.text.trim().length - "ApplicationNo".length) < Math.abs(previous.text.trim().length - "ApplicationNo".length)) ? current : previous), undefined);
+                (current.threshold === previous.threshold && Math.abs(current.text.trim().length - "ApplicationNumber".length) < Math.abs(previous.text.trim().length - "ApplicationNumber".length)) ? current : previous), undefined);
             startElements.push(bestMatch.element);
         }
     }
@@ -400,7 +401,7 @@ function getDownText(elements: Element[], topText: string, rightText: string, bo
 // Constructs the full address string based on the specified address components.
 
 function formatAddress(houseNumber: string, streetName: string, suburbName: string) {
-    suburbName = suburbName.replace(/^HD WARD\//, "").replace(/^HD /, "").replace(/ HD$/, "").replace(/ \(RPA\)$/, "").replace(/ SA$/, "").trim();
+    suburbName = suburbName.replace(/^HD WARD\//, "").replace(/^HD /, "").replace(/ HD$/, "").replace(/ SA$/, "").trim();
     suburbName = SuburbNames[suburbName.toUpperCase()] || suburbName;
     let separator = ((houseNumber !== "" || streetName !== "") && suburbName !== "") ? ", " : "";
     return `${houseNumber} ${streetName}${separator}${suburbName}`.trim().replace(/\s\s+/g, " ").toUpperCase().replace(/\*/g, "");
@@ -659,13 +660,12 @@ function addressComparer(a, b) {
 function parseApplicationElements(elements: Element[], startElement: Element, informationUrl: string) {
     // Get the application number.
 
-    let applicationNumber = getRightText(elements, "Application No", "Application Date", "Applicants Name");
+    let applicationNumber = getRightText(elements, "Application Number", "Application Date", "Applicant");
     if (applicationNumber === undefined || applicationNumber === "") {
         let elementSummary = elements.map(element => `[${element.text}]`).join("");
         console.log(`Could not find the application number on the PDF page for the current development application.  The development application will be ignored.  Elements: ${elementSummary}`);
         return undefined;
     }
-    applicationNumber = applicationNumber.replace(/[Il,]/g, "/");
     console.log(`    Found \"${applicationNumber}\".`);
 
     // Get the received date.
@@ -673,17 +673,9 @@ function parseApplicationElements(elements: Element[], startElement: Element, in
     let receivedDateText = "";
 
     if (elements.some(element => element.text.trim() === "Application Received")) {
-        receivedDateText = getRightText(elements, "Application Received", "Planning Approval", "Land Division Approval");
+        receivedDateText = getRightText(elements, "Application Received", "Fees", "Approval Date");
         if (receivedDateText === undefined)
-            receivedDateText = getRightText(elements, "Application Date", "Planning Approval", "Application Received");
-    } else if (elements.some(element => element.text.trim() === "Application received")) {
-        receivedDateText = getRightText(elements, "Application received", "Planning Approval", "Land Division Approval");
-        if (receivedDateText === undefined)
-            receivedDateText = getRightText(elements, "Application Date", "Planning Approval", "Application received");
-    } else if (elements.some(element => element.text.trim() === "Building Approval")) {
-        receivedDateText = getLeftText(elements, "Building Approval", "Application Date", "Building  received");
-        if (receivedDateText === undefined)
-            receivedDateText = getRightText(elements, "Application Date", "Planning Approval", "Building Approval");
+            receivedDateText = getRightText(elements, "Application Date", "Fees", "Application Received");
     }
 
     let receivedDate: moment.Moment = undefined;
@@ -692,18 +684,18 @@ function parseApplicationElements(elements: Element[], startElement: Element, in
 
     // Get the house number, street and suburb of the address.
 
-    let houseNumber = getRightText(elements, "Property House No", "Planning Conditions", "Lot");
+    let houseNumber = getRightText(elements, "Number", "Application Date", "Lot");
     if (houseNumber === undefined || houseNumber === "0")
         houseNumber = "";
 
-    let streetName = getRightText(elements, "Property street", "Planning Conditions", "Property suburb");
+    let streetName = getRightText(elements, "Street", "Application Date", "Title");
     if (streetName === undefined || streetName === "" || streetName === "0") {
         let elementSummary = elements.map(element => `[${element.text}]`).join("");
         console.log(`Application number ${applicationNumber} will be ignored because an address was not found or parsed (there is no street name).  Elements: ${elementSummary}`);
         return undefined;
     }
 
-    let suburbName = getRightText(elements, "Property suburb", "Planning Conditions", "Title");
+    let suburbName = getRightText(elements, "Suburb/Hundred", "Application Date", "Development Description");
     if (suburbName === undefined || suburbName === "" || suburbName === "0") {
         let elementSummary = elements.map(element => `[${element.text}]`).join("");
         console.log(`Application number ${applicationNumber} will be ignored because an address was not found or parsed (there is no suburb name for street \"${streetName}\").  Elements: ${elementSummary}`);
@@ -722,31 +714,27 @@ function parseApplicationElements(elements: Element[], startElement: Element, in
 
     let legalElements = [];
 
-    let lot = getRightText(elements, "Lot", "Planning Conditions", "Section");
+    let lot = getRightText(elements, "Lot", "Application Date", "Section");
     if (lot !== undefined)
         legalElements.push(`Lot ${lot}`);
 
-    let section = getRightText(elements, "Section", "Planning Conditions", "Plan");
+    let section = getRightText(elements, "Section", "Application Date", "Plan");
     if (section !== undefined)
         legalElements.push(`Section ${section}`);
 
-    let plan = getRightText(elements, "Plan", "Planning Conditions", "Property Street");
+    let plan = getRightText(elements, "Plan", "Application Date", "Street");
     if (plan !== undefined)
         legalElements.push(`Plan ${plan}`);
 
-    let title = getRightText(elements, "Title", "Planning Conditions", "Hundred");
+    let title = getRightText(elements, "Title", "Application Date", "Suburb/Hundred");
     if (title !== undefined)
         legalElements.push(`Title ${title}`);
-
-    let hundred = getRightText(elements, "Hundred", "Planning Conditions", "Development Description");
-    if (hundred !== undefined)
-        legalElements.push(`Hundred ${hundred}`);
 
     let legalDescription = legalElements.join(", ");
 
     // Get the description.
 
-    let description = getDownText(elements, "Development Description", "Relevant Authority", "Private Certifier Name");
+    let description = getRightText(elements, "Development Description", undefined, undefined);
 
     // Construct the resulting application information.
     
