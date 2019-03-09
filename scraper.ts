@@ -401,7 +401,7 @@ function getDownText(elements: Element[], topText: string, rightText: string, bo
 // Constructs the full address string based on the specified address components.
 
 function formatAddress(houseNumber: string, streetName: string, suburbName: string) {
-    suburbName = suburbName.replace(/^HD WARD\//, "").replace(/^HD /, "").replace(/ HD$/, "").replace(/ SA$/, "").trim();
+    suburbName = suburbName.replace(/^HD WARD\//i, "").replace(/HD OF /i, "").replace(/^HD /i, "").replace(/ HD$/i, "").replace(/ SA$/, "").trim();
     suburbName = SuburbNames[suburbName.toUpperCase()] || suburbName;
     let separator = ((houseNumber !== "" || streetName !== "") && suburbName !== "") ? ", " : "";
     return `${houseNumber} ${streetName}${separator}${suburbName}`.trim().replace(/\s\s+/g, " ").toUpperCase().replace(/\*/g, "");
@@ -702,6 +702,15 @@ function parseApplicationElements(elements: Element[], startElement: Element, in
         return undefined;
     }
 
+    let hundredName = "";
+    let tokens = suburbName.split(",");
+    if (tokens.length === 2) {  // extract the hundred name from the "Suburb/Hundred" text
+        if (tokens[0].toUpperCase().startsWith("HD"))
+            tokens.reverse();
+        suburbName = tokens[0];
+        hundredName = tokens[1].trim().replace(/^HUNDRED OF /i, "").replace(/^HUNDRED /i, "").replace(/^HD OF /i, "").replace(/^HD /i, "").trim();
+    }
+
     let address = parseAddress(houseNumber, streetName, suburbName);
     if (address === undefined)
     {
@@ -729,6 +738,9 @@ function parseApplicationElements(elements: Element[], startElement: Element, in
     let title = getRightText(elements, "Title", "Application Date", "Suburb/Hundred");
     if (title !== undefined)
         legalElements.push(`Title ${title}`);
+
+    if (hundredName !== "")
+        legalElements.push(`Hundred ${hundredName}`);
 
     let legalDescription = legalElements.join(", ");
 
