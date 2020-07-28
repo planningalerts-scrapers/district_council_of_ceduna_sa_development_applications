@@ -17,7 +17,7 @@ import didYouMean, * as didyoumean from "didyoumean2";
 
 sqlite3.verbose();
 
-const DevelopmentApplicationsUrl = "https://www.ceduna.sa.gov.au/publicregisterofapplications";
+const DevelopmentApplicationsUrl = "https://www.ceduna.sa.gov.au/services-and-facilities/development2/public-register-development-applications?result_57806_result_page={0}";
 const CommentUrl = "mailto:council@ceduna.sa.gov.au";
 
 declare const process: any;
@@ -45,7 +45,7 @@ async function initializeDatabase() {
 
 async function insertRow(database, developmentApplication) {
     return new Promise((resolve, reject) => {
-        let sqlStatement = database.prepare("insert or ignore into [data] values (?, ?, ?, ?, ?, ?, ?, ?)");
+        let sqlStatement = database.prepare("insert or replace into [data] values (?, ?, ?, ?, ?, ?, ?, ?)");
         sqlStatement.run([
             developmentApplication.applicationNumber,
             developmentApplication.address,
@@ -60,10 +60,7 @@ async function insertRow(database, developmentApplication) {
                 console.error(error);
                 reject(error);
             } else {
-                if (this.changes > 0)
-                    console.log(`    Inserted: application \"${developmentApplication.applicationNumber}\" with address \"${developmentApplication.address}\", description \"${developmentApplication.description}\", legal description \"${developmentApplication.legalDescription}\" and received date \"${developmentApplication.receivedDate}\" into the database.`);
-                else
-                    console.log(`    Skipped: application \"${developmentApplication.applicationNumber}\" with address \"${developmentApplication.address}\", description \"${developmentApplication.description}\", legal description \"${developmentApplication.legalDescription}\" and received date \"${developmentApplication.receivedDate}\" because it was already present in the database.`);
+                console.log(`    Saved application \"${developmentApplication.applicationNumber}\" with address \"${developmentApplication.address}\", description \"${developmentApplication.description}\", legal description \"${developmentApplication.legalDescription}\" and received date \"${developmentApplication.receivedDate}\" to the database.`);
                 sqlStatement.finalize();  // releases any locks
                 resolve(row);
             }
@@ -907,18 +904,22 @@ async function main() {
 
     // Read the main page of development applications.
 
-    console.log(`Retrieving page: ${DevelopmentApplicationsUrl}`);
-
-    let body = await request({ url: DevelopmentApplicationsUrl, rejectUnauthorized: false, proxy: process.env.MORPH_PROXY });
-    await sleep(2000 + getRandom(0, 5) * 1000);
-    let $ = cheerio.load(body);
-
     let pdfUrls: string[] = [];
-    for (let element of $("td.u6ListTD div.u6ListItem a").get()) {
-        let pdfUrl = new urlparser.URL(element.attribs.href, DevelopmentApplicationsUrl).href
-        if (pdfUrl.toLowerCase().includes("register") && pdfUrl.toLowerCase().includes(".pdf"))
-            if (!pdfUrls.some(url => url === pdfUrl))
-                pdfUrls.push(pdfUrl);
+
+    for (let index = 1; index <= 10; index++) {  // search up to 10 pages
+        let url = DevelopmentApplicationsUrl.replace(/\{0\}/g, index.toString());
+        console.log(`Retrieving page: ${url}`);
+
+        let body = await request({ url: url, rejectUnauthorized: false, proxy: process.env.MORPH_PROXY });
+        await sleep(2000 + getRandom(0, 5) * 1000);
+        let $ = cheerio.load(body);
+
+        for (let element of $("h3.generic-list__title a").get()) {
+            let pdfUrl = new urlparser.URL(element.attribs.href, DevelopmentApplicationsUrl).href
+            if (pdfUrl.toLowerCase().includes("register") && pdfUrl.toLowerCase().includes(".pdf"))
+                if (!pdfUrls.some(url => url === pdfUrl))  // avoid duplicates
+                    pdfUrls.push(pdfUrl);
+        }
     }
 
     // Always parse the most recent PDF file and randomly select one other PDF file to parse.
@@ -927,7 +928,6 @@ async function main() {
         console.log("No PDF files were found on the page.");
         return;
     }
-
     console.log(`Found ${pdfUrls.length} PDF file(s).  Selecting two to parse.`);
 
     // Select the most recent PDF.  And randomly select one other PDF (avoid processing all PDFs
